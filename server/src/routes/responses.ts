@@ -12,6 +12,7 @@ import type {
 import { routeRequest, hasEnabledVisionModel, hasEnabledToolsModel, resolveStickyPreference, routingReserveTokens, resolveModelGroupCandidates, resolveRoutingChain, type RouteResult, type ResolvedChain, type ChainRow } from '../services/router.js';
 import { getDb } from '../db/index.js';
 import { resolveAuth, prependSystemPrompt } from '../lib/system-prompt.js';
+import { normalizeIdempotencyKey, hashIdempotencyKey, computeIdempotencyFingerprint, lookupIdempotencyReplay, storeIdempotencyResult } from '../services/idempotency.js';
 import { isUnifyEnabled, getModelGroups, resolveRequestedIdForDispatch } from '../services/model-groups.js';
 import { contentToString, messageHasImage } from '../lib/content.js';
 import { resolveTaskType } from '../lib/task-type.js';
@@ -676,6 +677,52 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
 
   const stream = reqData.stream ?? false;
   let messages = toChatMessages(reqData);
+
+  // ── Idempotency-Key (services/idempotency.ts) ──
+  // Same opt-in retry dedup as /chat/completions (proxy.ts): a client that
+  // times out and retries with the same Idempotency-Key gets the ORIGINAL
+  // response replayed (zero provider cost) instead of burning a second
+  // free-tier slot. Only a SHA-256 hash of the key is stored; reusing a key
+  // with different content is a 409. Streaming always bypasses — a stream
+  // cannot be replayed as a unit. The fingerprint is computed from the
+  // pre-compression request (deterministic translation of the client body),
+  // so it survives compression-policy changes on the server.
+  const idemKeyRaw = req.headers['idempotency-key'] ?? req.headers['Idempotency-Key'];
+  const idemKey = !stream ? normalizeIdempotencyKey(idemKeyRaw) : null;
+  const idemFingerprint = idemKey
+    ? computeIdempotencyFingerprint({
+        model: reqData.model ?? undefined,
+        messages,
+        temperature: reqData.temperature ?? null,
+        top_p: reqData.top_p ?? null,
+        max_tokens: reqData.max_output_tokens ?? null,
+        tools: reqData.tools ?? null,
+        tool_choice: reqData.tool_choice ?? null,
+      })
+    : null;
+  if (idemKey && idemFingerprint) {
+    const keyHash = hashIdempotencyKey(idemKey);
+    const claim = lookupIdempotencyReplay(keyHash, idemFingerprint);
+    if (claim.kind === 'replay') {
+      // Replay consumes NO provider quota — same zero-cost rationale as a
+      // cache hit, so request/usage bookkeeping is skipped here too.
+      res.setHeader('X-Routed-Via', 'idempotency');
+      res.status(claim.status).json(claim.body);
+      return;
+    }
+    if (claim.kind === 'conflict') {
+      res.status(409).json({
+        error: {
+          message: 'idempotency_key_conflict',
+          type: 'invalid_request_error',
+        },
+        execution_id: requestGroupId,
+      });
+      return;
+    }
+    // kind === 'miss': proceed normally and persist the result on success.
+  }
+
   const tools = toChatTools(reqData.tools);
   // name → parameter schema, for repairing double-encoded tool arguments on
   // the way back out (see lib/tool-args.ts).
@@ -1557,10 +1604,17 @@ responsesRouter.post('/responses', async (req: Request, res: Response) => {
 
       res.setHeader('X-Routed-Via', routedViaValue(route.platform, route.modelId));
       setFallbackHeaders(res, attempt, attemptLog);
-      res.json(buildResponseObject({
+      const responseObject = buildResponseObject({
         id: responseId, model: route.modelId, text, toolCalls,
         promptTokens, completionTokens, reasoningTokens,
-      }));
+      });
+      // Persist for Idempotency-Key replays. A truncated turn
+      // (finish_reason 'length') is NOT stored — replaying a cut-off answer
+      // is worse than regenerating — matching the /chat/completions policy.
+      if (idemKey && idemFingerprint && result.choices?.[0]?.finish_reason !== 'length') {
+        storeIdempotencyResult(hashIdempotencyKey(idemKey), idemFingerprint, 200, responseObject);
+      }
+      res.json(responseObject);
 
       traceRouteEvent('Responses', {
         event: 'ok',
