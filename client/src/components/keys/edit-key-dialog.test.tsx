@@ -78,6 +78,29 @@ describe('editing provider credentials', () => {
     await submit()
     expect(apiFetch).toHaveBeenCalledWith('/api/keys/7', { method: 'PATCH', body: JSON.stringify({ key: 'new-token' }) })
   })
+  it('sends a monthly request cap typed into the budget field', async () => {
+    mount(<EditKeyDialog apiKey={{ ...key, platform: 'groq', monthlyRequestCap: 0, monthlyTokenCap: 0 }} onOpenChange={onOpenChange} />)
+    enter('#edit-key-request-cap', '1000')
+    await submit()
+    expect(apiFetch).toHaveBeenCalledWith('/api/keys/7', { method: 'PATCH', body: JSON.stringify({ monthlyRequestCap: 1000 }) })
+  })
+  it('clearing a cap field submits 0 (unlimited)', async () => {
+    mount(<EditKeyDialog apiKey={{ ...key, platform: 'groq', monthlyTokenCap: 500000 }} onOpenChange={onOpenChange} />)
+    enter('#edit-key-token-cap', '')
+    await submit()
+    expect(apiFetch).toHaveBeenCalledWith('/api/keys/7', { method: 'PATCH', body: JSON.stringify({ monthlyTokenCap: 0 }) })
+  })
+  it('shows the current month usage without touching the form', async () => {
+    mount(<EditKeyDialog
+      apiKey={{ ...key, platform: 'groq', monthlyUsage: { requests: 42, tokens: 1234, resetsAt: '2026-10-01T00:00:00.000Z' } }}
+      onOpenChange={onOpenChange}
+    />)
+    expect(container.textContent).toContain('42 requests')
+    expect(container.textContent).toContain('1234 tokens')
+    await submit()
+    expect(apiFetch).not.toHaveBeenCalled()
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
   it('loads model choices from the full catalog instead of a limited active chain', async () => {
     vi.mocked(apiFetch).mockImplementation(async path => path === '/api/models'
       ? [{ platform: 'cloudflare', modelId: 'outside-chain', displayName: 'Outside active chain', sizeLabel: 'Small', contextWindow: 1000 }]
