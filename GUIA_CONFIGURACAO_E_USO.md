@@ -220,9 +220,9 @@ aider --model openai/auto
 O FreeLLMAPI suporta emulação nativa do formato Anthropic `/v1/messages`. Você pode inicializar o assistente apontando o endpoint de API para o proxy local:
 ```bash
 cd /Users/danilonovais/MacOS-Use/freellmapi
-npx freellmapi setup-claude
+npx freellmapi setup-claude --url http://127.0.0.1:3001
 # ou para Codex:
-npx freellmapi setup-codex
+npx freellmapi setup-codex --url http://127.0.0.1:3001
 ```
 
 ---
