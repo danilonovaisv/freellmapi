@@ -202,27 +202,163 @@ curl http://localhost:3001/v1/chat/completions \
 
 ---
 
-## 8. Integração com Ferramentas de Código
+## 8. Integração com Ferramentas de Código e Assistentes
 
-### 8.1. Cursor / VS Code (Continue / Cline / Roo Code)
-- **Base URL**: `http://localhost:3001/v1`
-- **API Key**: `freellmapi-...`
-- **Model Name**: `auto` (ou nome de cadeia personalizada como `auto:coding`)
+O FreeLLMAPI unifica os modelos sob um endpoint local de alta performance (`http://127.0.0.1:3001`), suportando simultaneamente a API de **Mensagens da Anthropic** (`/v1/messages`) e a API de **Chat Completions da OpenAI / xAI** (`/v1/chat/completions`).
 
-### 8.2. Aider CLI
-```bash
-export OPENAI_API_BASE=http://localhost:3001/v1
-export OPENAI_API_KEY=SUA_CHAVE_UNIFICADA_AQUI
-aider --model openai/auto
+Sua chave unificada local:
+```text
+freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7
 ```
 
-### 8.3. Claude Code / Codex CLI
-O FreeLLMAPI suporta emulação nativa do formato Anthropic `/v1/messages`. Você pode inicializar o assistente apontando o endpoint de API para o proxy local:
+---
+
+### 8.1. Codex CLI
+O Codex CLI da OpenAI lê suas definições em `~/.codex/config.toml`. O FreeLLMAPI já está registrado como um provider e perfil dedicado.
+
+- **Arquivo**: `~/.codex/config.toml`
+- **Configuração aplicada**:
+  ```toml
+  [model_providers.freellmapi]
+  name = "FreeLLMAPI"
+  base_url = "http://127.0.0.1:3001/v1"
+  wire_api = "responses"
+  env_key = "FREELLMAPI_API_KEY"
+  requires_openai_auth = false
+
+  [profiles.freellmapi]
+  model = "auto"
+  model_provider = "freellmapi"
+  model_context_window = 128000
+  model_auto_compact_token_limit = 115200
+  tool_output_token_limit = 20000
+  ```
+
+- **Como executar no terminal**:
+  ```bash
+  # Usando o alias configurado no seu ~/.zshrc:
+  codex-free
+
+  # Ou comando direto:
+  codex --profile freellmapi
+  ```
+- **Zero-persistence Launcher (sem gravar chave no disco)**:
+  ```bash
+  npm run build -w cli
+  node cli/dist/index.js launch-codex
+  ```
+
+---
+
+### 8.2. Codex App (GUI Desktop / Extensão IDE)
+Para utilizar o FreeLLMAPI em aplicativos gráficos do Codex, ChatGPT Desktop ou extensões no VS Code:
+
+1. Acesse as **Configurações / Settings** do app.
+2. Na seção de **Model Provider / Custom API**:
+   - **Provider Type**: `OpenAI Compatible`
+   - **Base URL / Endpoint**: `http://127.0.0.1:3001/v1`
+   - **API Key**: `freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7` (ou a sua chave unificada do dashboard)
+   - **Model Name**: `auto` (ou `gpt-4o` / cadeia personalizada como `auto:coding`)
+3. Salve e inicie uma conversa; as requisições serão interceptadas e despachadas para o tier gratuito mais rápido.
+
+---
+
+### 8.3. Claude Code CLI
+O FreeLLMAPI emula perfeitamente o protocolo Anthropic (`ANTHROPIC_BASE_URL`). Para evitar qualquer conflito com seu setup existente (ex: CC Switch na porta 15721), foi configurado um perfil isolado em `~/.claude/profiles/freellmapi/settings.json`.
+
+- **Arquivo do Perfil**: `~/.claude/profiles/freellmapi/settings.json`
+  ```json
+  {
+    "env": {
+      "ANTHROPIC_BASE_URL": "http://127.0.0.1:3001",
+      "ANTHROPIC_AUTH_TOKEN": "freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7",
+      "ANTHROPIC_MODEL": "auto",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL": "auto",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL": "auto",
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL": "auto",
+      "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "128000",
+      "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1"
+    }
+  }
+  ```
+
+- **Como executar no terminal**:
+  ```bash
+  # Usando o alias configurado no seu ~/.zshrc:
+  claude-free
+
+  # Ou comando direto com a variável de diretório de configuração:
+  CLAUDE_CONFIG_DIR="$HOME/.claude/profiles/freellmapi" claude
+  ```
+- **Zero-persistence Launcher**:
+  ```bash
+  node cli/dist/index.js launch-claude
+  ```
+
+---
+
+### 8.4. Claude Code App / Claude Desktop (macOS)
+No macOS, o Claude Desktop lê suas integrações em `~/Library/Application Support/Claude/claude_desktop_config.json`.
+
+- **Para rotear chamadas de assistentes ou ferramentas MCP locais para o FreeLLMAPI**:
+  Certifique-se de que os MCP servers configurados utilizem a URL base do proxy local `http://127.0.0.1:3001` e a chave unificada.
+- **Caso execute Claude Desktop conectado via túnel local**:
+  Defina `ANTHROPIC_BASE_URL=http://127.0.0.1:3001` no ambiente de lançamento do aplicativo ou use um script launcher:
+  ```bash
+  ANTHROPIC_BASE_URL="http://127.0.0.1:3001" open -a "Claude"
+  ```
+
+---
+
+### 8.5. Grok Code CLI (xAI / OpenCode)
+O xAI Grok utiliza uma interface 100% compatível com a especificação OpenAI. O FreeLLMAPI roteia requisições do Grok diretamente pelo proxy com fallback automático para qualquer provedor ativo caso as cotas de xAI se esgotem.
+
+- **Variáveis de Ambiente Recomendadas**:
+  ```bash
+  export XAI_BASE_URL="http://127.0.0.1:3001/v1"
+  export XAI_API_KEY="freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7"
+  export OPENAI_BASE_URL="http://127.0.0.1:3001/v1"
+  export OPENAI_API_KEY="freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7"
+  ```
+
+- **Como executar CLI usando Grok / FreeLLMAPI**:
+  ```bash
+  # Usando o alias exportado no seu shell:
+  grok-free opencode
+
+  # Ou com Aider apontando para modelo Grok / Auto:
+  OPENAI_API_BASE="http://127.0.0.1:3001/v1" OPENAI_API_KEY="$FREELLMAPI_API_KEY" aider --model openai/auto
+  ```
+
+---
+
+### 8.6. Grok Code App (Apps Desktop & GUIs)
+Para qualquer cliente gráfico que utilize Grok ou modelos xAI (ex: Cherry Studio, Chatbox, Cursor, Cline, Roo Code, NextChat):
+
+1. **Configuração de Provedor**:
+   - Escolha **Custom / OpenAI-Compatible** ou **xAI Custom Endpoint**.
+   - **Base URL**: `http://127.0.0.1:3001/v1`
+   - **API Key**: `freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7`
+2. **Modelos**:
+   - `auto` (deixa o roteador do FreeLLMAPI selecionar a melhor IA com fallback instantâneo)
+   - `grok-2-1212` ou `grok-beta` (quando a chave xAI estiver cadastrada no dashboard em Keys)
+   - `auto:coding` (para priorizar modelos especialistas em programação)
+
+---
+
+### 8.7. Cursor / VS Code (Continue / Cline / Roo Code)
+- **Base URL**: `http://127.0.0.1:3001/v1`
+- **API Key**: `freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7`
+- **Model Name**: `auto` (ou nome de cadeia personalizada como `auto:coding`)
+- **Streaming & Tools**: Suporte total ativado.
+
+---
+
+### 8.8. Aider CLI
 ```bash
-cd /Users/danilonovais/MacOS-Use/freellmapi
-npx freellmapi setup-claude --url http://127.0.0.1:3001
-# ou para Codex:
-npx freellmapi setup-codex --url http://127.0.0.1:3001
+export OPENAI_API_BASE=http://127.0.0.1:3001/v1
+export OPENAI_API_KEY=freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7
+aider --model openai/auto
 ```
 
 ---
