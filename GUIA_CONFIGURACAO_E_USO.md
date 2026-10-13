@@ -145,7 +145,7 @@ from openai import OpenAI
 # Conecta ao proxy local usando a chave unificada
 client = OpenAI(
     base_url="http://localhost:3001/v1",
-    api_key="SUA_CHAVE_UNIFICADA_AQUI"
+    api_key="freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7"
 )
 
 # Roteamento automático para o melhor modelo da cadeia (ou use model="auto")
@@ -170,7 +170,7 @@ import OpenAI from 'openai';
 
 const openai = new OpenAI({
   baseURL: 'http://localhost:3001/v1',
-  apiKey: process.env.FREELLMAPI_KEY || 'SUA_CHAVE_UNIFICADA_AQUI',
+  apiKey: process.env.FREELLMAPI_KEY || 'freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7',
 });
 
 async function main() {
@@ -192,7 +192,7 @@ main();
 ```bash
 curl http://localhost:3001/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SUA_CHAVE_UNIFICADA_AQUI" \
+  -H "Authorization: Bearer freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7" \
   -d '{
     "model": "auto",
     "messages": [{"role": "user", "content": "Teste de conexão!"}],
@@ -214,32 +214,33 @@ freellmapi-3f14e5fb18492ca6fe2d080451f340465a0c3fd76e66efe7
 ---
 
 ### 8.1. Codex CLI
-O Codex CLI da OpenAI lê suas definições em `~/.codex/config.toml`. O FreeLLMAPI já está registrado como um provider e perfil dedicado.
+O Codex CLI da OpenAI utiliza arquivos dedicados de perfil no formato `~/.codex/<perfil>.config.toml`.
 
-- **Arquivo**: `~/.codex/config.toml`
-- **Configuração aplicada**:
+- **Arquivo do Perfil**: `~/.codex/freellmapi.config.toml`
   ```toml
+  model = "auto"
+  model_provider = "freellmapi"
+  model_context_window = 128000
+  model_auto_compact_token_limit = 115200
+  tool_output_token_limit = 20000
+
   [model_providers.freellmapi]
   name = "FreeLLMAPI"
   base_url = "http://127.0.0.1:3001/v1"
   wire_api = "responses"
   env_key = "FREELLMAPI_API_KEY"
   requires_openai_auth = false
-
-  [profiles.freellmapi]
-  model = "auto"
-  model_provider = "freellmapi"
-  model_context_window = 128000
-  model_auto_compact_token_limit = 115200
-  tool_output_token_limit = 20000
   ```
+
+- **Arquivo Global**: `~/.codex/config.toml`
+  Registra o provedor `[model_providers.freellmapi]` sem a tabela legada `[profiles.freellmapi]`.
 
 - **Como executar no terminal**:
   ```bash
   # Usando o alias configurado no seu ~/.zshrc:
   codex-free
 
-  # Ou comando direto:
+  # Ou comando direto do Codex CLI:
   codex --profile freellmapi
   ```
 - **Zero-persistence Launcher (sem gravar chave no disco)**:
